@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\CatalogoCache;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,7 +13,7 @@ class EnsureRole
     {
         $usuario = $request->user();
 
-        if (! $usuario || ! in_array($usuario->rol?->nombre, $roles, true)) {
+        if (! $usuario || ! in_array(CatalogoCache::rolNombre($usuario->rol_id), $roles, true)) {
             return response()->json([
                 'message' => 'No tienes permisos para realizar esta acción.',
             ], 403);

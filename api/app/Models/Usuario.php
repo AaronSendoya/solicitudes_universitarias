@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CatalogoCache;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -43,19 +44,30 @@ class Usuario extends Authenticatable
         return $this->belongsTo(Rol::class);
     }
 
+    /**
+     * Resolves the role name from CatalogoCache rather than the 'rol'
+     * relation, unless it's already been eager-loaded — roles are almost
+     * never changed, so this avoids a ~250ms round trip on every request
+     * that checks a permission (i.e. nearly all of them).
+     */
+    private function nombreRol(): ?string
+    {
+        return $this->relationLoaded('rol') ? $this->rol?->nombre : CatalogoCache::rolNombre($this->rol_id);
+    }
+
     public function esEstudiante(): bool
     {
-        return $this->rol?->nombre === Rol::ESTUDIANTE;
+        return $this->nombreRol() === Rol::ESTUDIANTE;
     }
 
     public function esAdministrativo(): bool
     {
-        return $this->rol?->nombre === Rol::ADMINISTRATIVO;
+        return $this->nombreRol() === Rol::ADMINISTRATIVO;
     }
 
     public function esTecnico(): bool
     {
-        return $this->rol?->nombre === Rol::TECNICO;
+        return $this->nombreRol() === Rol::TECNICO;
     }
 
     public function solicitudesCreadas(): HasMany

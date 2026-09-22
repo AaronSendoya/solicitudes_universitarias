@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../core/api_exception.dart';
 import '../models/usuario.dart';
 import '../services/auth_service.dart';
+import '../services/catalogo_service.dart';
 
 enum EstadoAuth { cargando, autenticado, invitado }
 
@@ -22,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
     usuario = u;
     estado = u != null ? EstadoAuth.autenticado : EstadoAuth.invitado;
     notifyListeners();
+    if (u != null) unawaited(CatalogoService.precargar());
   }
 
   Future<bool> login(String correo, String password) async {
@@ -31,6 +35,7 @@ class AuthProvider extends ChangeNotifier {
       usuario = resultado.usuario;
       estado = EstadoAuth.autenticado;
       notifyListeners();
+      unawaited(CatalogoService.precargar());
       return true;
     } catch (e) {
       errorMensaje = _mensajeDeError(e);
@@ -58,6 +63,7 @@ class AuthProvider extends ChangeNotifier {
       usuario = resultado.usuario;
       estado = EstadoAuth.autenticado;
       notifyListeners();
+      unawaited(CatalogoService.precargar());
       return true;
     } catch (e) {
       errorMensaje = _mensajeDeError(e);

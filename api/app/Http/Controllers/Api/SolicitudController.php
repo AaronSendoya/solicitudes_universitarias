@@ -16,19 +16,22 @@ use App\Models\HistorialSolicitud;
 use App\Models\Prioridad;
 use App\Models\Solicitud;
 use App\Models\Usuario;
+use App\Support\CatalogoCache;
 use Illuminate\Http\Request;
 
 class SolicitudController extends Controller
 {
-    private const RELACIONES_LISTADO = ['estado', 'tipo', 'prioridad', 'ubicacion', 'solicitante', 'responsableActual'];
+    // estado/tipo/prioridad/ubicacion/recurso are resolved from
+    // CatalogoCache in SolicitudResource instead of being eager-loaded
+    // here — against a remote DB, each relation was its own ~250ms round
+    // trip for data that essentially never changes.
+    private const RELACIONES_LISTADO = ['solicitante', 'responsableActual'];
 
-    private const RELACIONES_DETALLE = [
-        'estado', 'tipo', 'prioridad', 'ubicacion', 'recurso',
-        'solicitante', 'responsableActual',
-        'comentarios.autor', 'archivosAdjuntos.subidoPor',
-        'asignaciones.usuarioAsignado', 'asignaciones.asignadoPor',
-        'historial.usuarioCambio',
-    ];
+    // Only the four collections are eager-loaded here; every "usuario"
+    // relation (solicitante, responsableActual, and every nested author)
+    // is stitched on afterwards in hidratarDetalle() from a single batched
+    // query instead of one query per relation.
+    private const RELACIONES_DETALLE = ['comentarios', 'archivosAdjuntos', 'asignaciones', 'historial'];
 
     public function index(Request $request)
     {
@@ -36,7 +39,7 @@ class SolicitudController extends Controller
 
         $query = Solicitud::query()->with(self::RELACIONES_LISTADO);
 
-        match ($usuario->rol?->nombre) {
+        match (CatalogoCache::rolNombre($usuario->rol_id)) {
             'Administrativo' => null,
             'Tecnico' => $query->where('usuario_responsable_actual_id', $usuario->id),
             default => $query->where('usuario_solicitante_id', $usuario->id),
@@ -86,14 +89,14 @@ class SolicitudController extends Controller
 
         $this->registrarHistorial($solicitud, $request->user(), 'creacion', null, 'Solicitud registrada');
 
-        return new SolicitudResource($solicitud->load(self::RELACIONES_DETALLE));
+        return new SolicitudResource($this->hidratarDetalle($solicitud));
     }
 
     public function show(Request $request, Solicitud $solicitud)
     {
         $this->authorize('view', $solicitud);
 
-        return new SolicitudResource($solicitud->load(self::RELACIONES_DETALLE));
+        return new SolicitudResource($this->hidratarDetalle($solicitud));
     }
 
     public function update(UpdateSolicitudRequest $request, Solicitud $solicitud)
@@ -111,7 +114,7 @@ class SolicitudController extends Controller
             }
         }
 
-        return new SolicitudResource($solicitud->load(self::RELACIONES_DETALLE));
+        return new SolicitudResource($this->hidratarDetalle($solicitud));
     }
 
     public function destroy(Request $request, Solicitud $solicitud)
@@ -139,7 +142,7 @@ class SolicitudController extends Controller
 
         $solicitud->save();
 
-        return new SolicitudResource($solicitud->load(self::RELACIONES_DETALLE));
+        return new SolicitudResource($this->hidratarDetalle($solicitud));
     }
 
     public function asignar(AsignarResponsableRequest $request, Solicitud $solicitud)
@@ -168,7 +171,7 @@ class SolicitudController extends Controller
         $solicitud->usuario_responsable_actual_id = $tecnico->id;
 
         $enProceso = EstadoSolicitud::where('nombre', EstadoSolicitud::EN_PROCESO)->value('id');
-        if (in_array($solicitud->estado?->nombre, [EstadoSolicitud::ABIERTA, EstadoSolicitud::PENDIENTE_REVISION])) {
+        if (in_array(CatalogoCache::estadoNombre($solicitud->estado_id), [EstadoSolicitud::ABIERTA, EstadoSolicitud::PENDIENTE_REVISION])) {
             $solicitud->estado_id = $enProceso;
         }
 
@@ -182,7 +185,7 @@ class SolicitudController extends Controller
             trim("{$tecnico->nombres} {$tecnico->apellidos}")
         );
 
-        return new SolicitudResource($solicitud->load(self::RELACIONES_DETALLE));
+        return new SolicitudResource($this->hidratarDetalle($solicitud));
     }
 
     public function cambiarEstado(CambiarEstadoRequest $request, Solicitud $solicitud)
@@ -190,7 +193,7 @@ class SolicitudController extends Controller
         $this->authorize('cambiarEstado', $solicitud);
 
         $nuevoEstado = EstadoSolicitud::findOrFail($request->estado_id);
-        $estadoAnterior = $solicitud->estado?->nombre;
+        $estadoAnterior = CatalogoCache::estadoNombre($solicitud->estado_id);
 
         $solicitud->estado_id = $nuevoEstado->id;
         $solicitud->fecha_cierre = $nuevoEstado->nombre === EstadoSolicitud::CERRADA ? now() : null;
@@ -205,7 +208,7 @@ class SolicitudController extends Controller
             ]);
         }
 
-        return new SolicitudResource($solicitud->load(self::RELACIONES_DETALLE));
+        return new SolicitudResource($this->hidratarDetalle($solicitud));
     }
 
     public function asignaciones(Request $request, Solicitud $solicitud)
@@ -215,6 +218,52 @@ class SolicitudController extends Controller
         return AsignacionResource::collection(
             $solicitud->asignaciones()->with(['usuarioAsignado', 'asignadoPor'])->orderByDesc('fecha_asignacion')->get()
         );
+    }
+
+    /**
+     * Loads everything a solicitud's detail view needs, resolving every
+     * "usuario" relation (solicitante, responsable, comment authors,
+     * uploaders, assignees, history actors) from a single batched query
+     * instead of one round trip per relation. Against a remote database at
+     * ~250ms per round trip, this is the difference between the detail
+     * endpoint taking ~1s instead of ~4-5s.
+     */
+    private function hidratarDetalle(Solicitud $solicitud): Solicitud
+    {
+        $solicitud->load(self::RELACIONES_DETALLE);
+
+        $idsUsuarios = collect([$solicitud->usuario_solicitante_id, $solicitud->usuario_responsable_actual_id])
+            ->merge($solicitud->comentarios->pluck('usuario_autor_id'))
+            ->merge($solicitud->archivosAdjuntos->pluck('usuario_subidor_id'))
+            ->merge($solicitud->asignaciones->pluck('usuario_asignado_id'))
+            ->merge($solicitud->asignaciones->pluck('asignado_por_id'))
+            ->merge($solicitud->historial->pluck('usuario_cambio_id'))
+            ->filter()
+            ->unique();
+
+        $usuarios = Usuario::whereIn('id', $idsUsuarios)->get()->keyBy('id');
+
+        $solicitud->setRelation('solicitante', $usuarios->get($solicitud->usuario_solicitante_id));
+        $solicitud->setRelation('responsableActual', $usuarios->get($solicitud->usuario_responsable_actual_id));
+
+        foreach ($solicitud->comentarios as $comentario) {
+            $comentario->setRelation('autor', $usuarios->get($comentario->usuario_autor_id));
+        }
+
+        foreach ($solicitud->archivosAdjuntos as $archivo) {
+            $archivo->setRelation('subidoPor', $usuarios->get($archivo->usuario_subidor_id));
+        }
+
+        foreach ($solicitud->asignaciones as $asignacion) {
+            $asignacion->setRelation('usuarioAsignado', $usuarios->get($asignacion->usuario_asignado_id));
+            $asignacion->setRelation('asignadoPor', $usuarios->get($asignacion->asignado_por_id));
+        }
+
+        foreach ($solicitud->historial as $historial) {
+            $historial->setRelation('usuarioCambio', $usuarios->get($historial->usuario_cambio_id));
+        }
+
+        return $solicitud;
     }
 
     private function registrarHistorial(Solicitud $solicitud, Usuario $usuario, string $campo, ?string $anterior, ?string $nuevo): void

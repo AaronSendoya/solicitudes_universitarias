@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/auth_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('es');
   runApp(const CampusConnectApp());
 }
 
@@ -19,14 +23,7 @@ class CampusConnectApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Campus Connect',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E5AA8)),
-          useMaterial3: true,
-          appBarTheme: const AppBarTheme(centerTitle: false),
-          inputDecorationTheme: const InputDecorationTheme(
-            border: OutlineInputBorder(),
-          ),
-        ),
+        theme: AppTheme.light(),
         home: const _RaizApp(),
       ),
     );

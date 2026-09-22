@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import '../theme/app_theme.dart';
 import 'reportes/reportes_screen.dart';
 import 'solicitudes/crear_solicitud_screen.dart';
 import 'solicitudes/solicitudes_list_screen.dart';
@@ -51,7 +53,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_tabIndex == 0 ? tituloBandeja : 'Reportes de gestión'),
+        title: Text(_tabIndex == 0 ? '' : 'Reportes de gestión'),
+        backgroundColor: _tabIndex == 0 ? AppColors.primary : null,
+        foregroundColor: _tabIndex == 0 ? Colors.white : null,
+        systemOverlayStyle: _tabIndex == 0 ? SystemUiOverlayStyle.light : null,
         actions: [
           PopupMenuButton<String>(
             icon: const CircleAvatar(child: Icon(Icons.person)),

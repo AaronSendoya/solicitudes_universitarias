@@ -6,7 +6,7 @@ import '../models/solicitud.dart';
 class SolicitudService {
   final ApiClient _client;
 
-  SolicitudService({ApiClient? client}) : _client = client ?? ApiClient();
+  SolicitudService({ApiClient? client}) : _client = client ?? ApiClient.instance;
 
   /// Listing is automatically scoped by the API according to the caller's
   /// role: an Estudiante sees only their own, a Tecnico sees only what's

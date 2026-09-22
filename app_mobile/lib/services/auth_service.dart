@@ -14,7 +14,7 @@ class AuthService {
   final TokenStorage _tokenStorage;
 
   AuthService({ApiClient? client, TokenStorage? tokenStorage})
-    : _client = client ?? ApiClient(),
+    : _client = client ?? ApiClient.instance,
       _tokenStorage = tokenStorage ?? TokenStorage();
 
   Future<AuthResult> login(String correo, String password) async {

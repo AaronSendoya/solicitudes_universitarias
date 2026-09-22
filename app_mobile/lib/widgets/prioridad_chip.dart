@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class PrioridadChip extends StatelessWidget {
   final String prioridad;
 
@@ -8,11 +10,11 @@ class PrioridadChip extends StatelessWidget {
   Color _color() {
     switch (prioridad) {
       case 'Alta':
-        return Colors.red;
+        return AppColors.prioridadAlta;
       case 'Media':
-        return Colors.amber.shade800;
+        return AppColors.prioridadMedia;
       case 'Baja':
-        return Colors.teal;
+        return AppColors.prioridadBaja;
       default:
         return Colors.grey;
     }

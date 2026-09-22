@@ -4,7 +4,7 @@ import '../models/usuario.dart';
 class UsuarioService {
   final ApiClient _client;
 
-  UsuarioService({ApiClient? client}) : _client = client ?? ApiClient();
+  UsuarioService({ApiClient? client}) : _client = client ?? ApiClient.instance;
 
   Future<List<Usuario>> listar({String? rol}) async {
     final json = await _client.get('/usuarios', query: {'rol': rol});

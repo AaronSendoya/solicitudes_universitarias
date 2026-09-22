@@ -4,7 +4,7 @@ import '../models/reporte_gestion.dart';
 class ReporteService {
   final ApiClient _client;
 
-  ReporteService({ApiClient? client}) : _client = client ?? ApiClient();
+  ReporteService({ApiClient? client}) : _client = client ?? ApiClient.instance;
 
   Future<ReporteGestion> gestion({
     DateTime? fechaDesde,

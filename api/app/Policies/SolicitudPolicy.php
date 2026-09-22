@@ -5,12 +5,13 @@ namespace App\Policies;
 use App\Models\EstadoSolicitud;
 use App\Models\Solicitud;
 use App\Models\Usuario;
+use App\Support\CatalogoCache;
 
 class SolicitudPolicy
 {
     public function view(Usuario $usuario, Solicitud $solicitud): bool
     {
-        return match ($usuario->rol?->nombre) {
+        return match (CatalogoCache::rolNombre($usuario->rol_id)) {
             'Administrativo' => true,
             'Tecnico' => $solicitud->usuario_responsable_actual_id === $usuario->id
                 || $solicitud->asignaciones()->where('usuario_asignado_id', $usuario->id)->exists(),
@@ -30,7 +31,7 @@ class SolicitudPolicy
         }
 
         return $solicitud->usuario_solicitante_id === $usuario->id
-            && $solicitud->estado?->nombre === EstadoSolicitud::ABIERTA;
+            && CatalogoCache::estadoNombre($solicitud->estado_id) === EstadoSolicitud::ABIERTA;
     }
 
     public function delete(Usuario $usuario, Solicitud $solicitud): bool
@@ -40,7 +41,7 @@ class SolicitudPolicy
         }
 
         return $solicitud->usuario_solicitante_id === $usuario->id
-            && $solicitud->estado?->nombre === EstadoSolicitud::ABIERTA;
+            && CatalogoCache::estadoNombre($solicitud->estado_id) === EstadoSolicitud::ABIERTA;
     }
 
     public function clasificar(Usuario $usuario): bool

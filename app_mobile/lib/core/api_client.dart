@@ -8,13 +8,25 @@ import 'token_storage.dart';
 
 /// Thin wrapper around [http] that attaches the bearer token, serializes
 /// JSON bodies and turns non-2xx responses into [ApiException].
+///
+/// Services default to [ApiClient.instance] so every screen shares the same
+/// underlying [http.Client] (and therefore its HTTP keep-alive connection
+/// pool) instead of paying for a fresh TCP handshake every time a screen or
+/// dialog is built.
 class ApiClient {
+  static final ApiClient instance = ApiClient._();
+
   final TokenStorage _tokenStorage;
   final http.Client _http;
 
-  ApiClient({TokenStorage? tokenStorage, http.Client? httpClient})
+  ApiClient._({TokenStorage? tokenStorage, http.Client? httpClient})
     : _tokenStorage = tokenStorage ?? TokenStorage(),
       _http = httpClient ?? http.Client();
+
+  /// For tests only — production code should use [ApiClient.instance].
+  factory ApiClient.test({TokenStorage? tokenStorage, http.Client? httpClient}) {
+    return ApiClient._(tokenStorage: tokenStorage, httpClient: httpClient);
+  }
 
   Future<Map<String, String>> _headers({bool json = true}) async {
     final token = await _tokenStorage.read();

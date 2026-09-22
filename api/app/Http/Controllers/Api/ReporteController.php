@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\EstadoSolicitud;
 use App\Models\Solicitud;
+use App\Support\CatalogoCache;
 use Illuminate\Http\Request;
 
 class ReporteController extends Controller
@@ -17,7 +18,7 @@ class ReporteController extends Controller
     {
         $this->authorize('viewReportes', Solicitud::class);
 
-        $query = Solicitud::query()->with(['estado', 'tipo', 'prioridad', 'responsableActual']);
+        $query = Solicitud::query()->with('responsableActual');
 
         if ($request->filled('fecha_desde')) {
             $query->whereDate('fecha_creacion', '>=', $request->date('fecha_desde'));
@@ -35,7 +36,9 @@ class ReporteController extends Controller
 
         $solicitudes = $query->get();
 
-        $cerradas = $solicitudes->filter(fn ($s) => $s->estado?->nombre === EstadoSolicitud::CERRADA && $s->fecha_cierre);
+        $cerradas = $solicitudes->filter(
+            fn ($s) => CatalogoCache::estadoNombre($s->estado_id) === EstadoSolicitud::CERRADA && $s->fecha_cierre
+        );
 
         $tiempoPromedioHoras = $cerradas->isEmpty()
             ? null
@@ -44,15 +47,15 @@ class ReporteController extends Controller
         return response()->json([
             'total_solicitudes' => $solicitudes->count(),
             'tiempo_promedio_resolucion_horas' => $tiempoPromedioHoras,
-            'por_estado' => $solicitudes->groupBy(fn ($s) => $s->estado?->nombre ?? 'Sin estado')
+            'por_estado' => $solicitudes->groupBy(fn ($s) => CatalogoCache::estadoNombre($s->estado_id) ?? 'Sin estado')
                 ->map->count()
                 ->map(fn ($total, $nombre) => ['nombre' => $nombre, 'total' => $total])
                 ->values(),
-            'por_tipo' => $solicitudes->groupBy(fn ($s) => $s->tipo?->nombre ?? 'Sin tipo')
+            'por_tipo' => $solicitudes->groupBy(fn ($s) => CatalogoCache::tipoNombre($s->tipo_id) ?? 'Sin tipo')
                 ->map->count()
                 ->map(fn ($total, $nombre) => ['nombre' => $nombre, 'total' => $total])
                 ->values(),
-            'por_prioridad' => $solicitudes->groupBy(fn ($s) => $s->prioridad?->nombre ?? 'Sin prioridad')
+            'por_prioridad' => $solicitudes->groupBy(fn ($s) => CatalogoCache::prioridadNombre($s->prioridad_id) ?? 'Sin prioridad')
                 ->map->count()
                 ->map(fn ($total, $nombre) => ['nombre' => $nombre, 'total' => $total])
                 ->values(),
